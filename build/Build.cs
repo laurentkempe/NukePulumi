@@ -25,6 +25,12 @@ using static Nuke.Common.Tools.DotNet.DotNetTasks;
     GitHubActionsImage.UbuntuLatest,
     On = new[] { GitHubActionsTrigger.Push },
     InvokedTargets = new[] { nameof(Publish) })]
+[GitHubActions(
+    "deploy",
+    GitHubActionsImage.UbuntuLatest,
+    On = new[] { GitHubActionsTrigger.WorkflowDispatch },
+    InvokedTargets = new[] { nameof(Deploy) },
+    ImportSecrets = new[] { "PULUMI_ACCESS_TOKEN" })]
 class Build : NukeBuild
 {
     AbsolutePath SourceDirectory => RootDirectory / "src";  
@@ -91,8 +97,10 @@ class Build : NukeBuild
     Target Deploy => _ => _  
         .DependsOn(Publish)  
         .After(ProvisionInfra)  
-        .Executes(async () =>  
-        {  
+        .Executes(async () =>
+        {
+            PulumiTasks.PulumiStackSelect(settings => settings.SetStackName("dev"));
+            
             var publishingUsername = GetPulumiOutput("publishingUsername");  
             var publishingUserPassword = GetPulumiOutput("publishingUserPassword");  
             var base64Auth = Convert.ToBase64String(Encoding.Default.GetBytes($"{publishingUsername}:{publishingUserPassword}"));  
