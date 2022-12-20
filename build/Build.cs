@@ -24,13 +24,14 @@ using static Nuke.Common.Tools.DotNet.DotNetTasks;
     "continuous",
     GitHubActionsImage.UbuntuLatest,
     On = new[] { GitHubActionsTrigger.Push },
-    InvokedTargets = new[] { nameof(Compile) })]
+    InvokedTargets = new[] { nameof(Publish) })]
 class Build : NukeBuild
 {
     AbsolutePath SourceDirectory => RootDirectory / "src";  
     AbsolutePath InfrastructureDirectory => RootDirectory / "infra";  
     AbsolutePath WebApiPackageDirectory => RootDirectory / "output";
     AbsolutePath ArtifactsDirectory => RootDirectory / "artifacts";
+    AbsolutePath ArtifactFileName => ArtifactsDirectory / "api.zip";
     
     [Solution("./NukePulumi.sln")] readonly Solution Solution;
 
@@ -64,7 +65,8 @@ class Build : NukeBuild
         });
 
     Target Publish => _ => _  
-        .DependsOn(Clean, Compile)  
+        .DependsOn(Clean, Compile)
+        .Produces(ArtifactFileName)
         .Executes(() =>  
         {  
             DotNetPublish(_ => _  
@@ -73,7 +75,7 @@ class Build : NukeBuild
                 .EnableNoBuild()  
                 .SetOutput(WebApiPackageDirectory));  
   
-            ZipFile.CreateFromDirectory(WebApiPackageDirectory, ArtifactsDirectory / "api.zip");  
+            ZipFile.CreateFromDirectory(WebApiPackageDirectory, ArtifactFileName);  
         });
     
     Target ProvisionInfra => _ => _  
@@ -95,7 +97,7 @@ class Build : NukeBuild
             var publishingUserPassword = GetPulumiOutput("publishingUserPassword");  
             var base64Auth = Convert.ToBase64String(Encoding.Default.GetBytes($"{publishingUsername}:{publishingUserPassword}"));  
   
-            await using var package = File.OpenRead(ArtifactsDirectory / "api.zip");  
+            await using var package = File.OpenRead(ArtifactFileName);  
             using var httpClient = new HttpClient();  
             httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", base64Auth);  
             await httpClient.PostAsync($"https://{GetPulumiOutput("appServiceName")}.scm.azurewebsites.net/api/zipdeploy",  
